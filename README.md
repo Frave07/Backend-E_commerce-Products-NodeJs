@@ -1,4 +1,4 @@
-# BackEnd - NodeJs - E_Commerce Products Shop -> Flutter
+# BackEnd - NodeJs - E_Commerce Products Shop
 
 Frave Developer 
 

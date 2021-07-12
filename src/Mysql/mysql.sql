@@ -2,7 +2,18 @@ CREATE DATABASE productshop;
 
 USE productshop;
 
-ALTER TABLE users
+CREATE TABLE person
+(
+	uid INT PRIMARY KEY AUTO_INCREMENT,
+	firstName VARCHAR(50) NULL,
+	lastName VARCHAR(50) NULL,
+	phone VARCHAR(11) NULL,
+	address VARCHAR(90) NULL,
+	reference VARCHAR(90) NULL,
+	image VARCHAR(250) NULL
+)
+
+CREATE TABLE users
 (
 	id INT PRIMARY KEY AUTO_INCREMENT,
 	users VARCHAR(50) NOT NULL,
@@ -14,19 +25,9 @@ ALTER TABLE users
 	persona_id INT NOT NULL,
 	created DATETIME DEFAULT NOW(),
 	UNIQUE KEY (email),
-	FOREIGN KEY (persona_id) REFERENCES person(uid),
+	FOREIGN KEY (persona_id) REFERENCES person(uid)
 )
 
-CREATE TABLE person
-(
-	uid INT PRIMARY KEY AUTO_INCREMENT,
-	firstName VARCHAR(50) NULL,
-	lastName VARCHAR(50) NULL,
-	phone VARCHAR(11) NULL,
-	address VARCHAR(90) NULL,
-	reference VARCHAR(90) NULL,
-	image VARCHAR(250) NULL
-)
 
 CREATE TABLE Home_carousel
 (

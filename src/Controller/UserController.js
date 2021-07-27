@@ -1,26 +1,41 @@
 const { response } = require('express');
 const fs = require('fs-extra');
 const path = require('path');
-const pool = require('../DataBase/DataBase');
+const Person = require('../Models/Person');
 
 
 const changeFotoProfile = async ( req, res = response ) => {
 
-    const { uidPerson } = req.body;
+    const uidPerson  = req.uid;
     const pathNew = req.file.filename;
 
-    const rows = await pool.query('SELECT image FROM person WHERE uid = ?', [ uidPerson ]);
+    Person.findById( uidPerson ).exec( async (err, persondb) => {
 
-    if( rows[0].image != '' ){
-        await fs.unlink(path.resolve('src/Uploads/Profile/'+rows[0].image))
-    }
+        if( err ){
+            return res.status(500).json({
+                resp: false,
+                msj : "Error: Change Photo profile "
+            });
+        }
+        console.log(uidPerson);
+        console.log('---------------------');
 
-    await pool.query(`CALL SP_SAVE_IMAGE_PROFILE(?,?);`, [ pathNew, uidPerson ]);
+        if( persondb.image != undefined){
+            await fs.unlink(path.resolve('src/Uploads/Profile/'+ persondb.image));
+        }
 
-    return res.json({
-        resp: true,
-        msj : 'Updated image',
-        profile : pathNew
+        let updateImage = {
+            image: pathNew
+        }
+
+        await Person.findByIdAndUpdate( uidPerson, updateImage, { new: true, runValidators: true } );
+
+        res.json({
+            resp: true,
+            msj : 'Updated image',
+            profile : pathNew
+        });
+
     });
 }
 
@@ -30,12 +45,21 @@ const userPersonalRegister = async ( req, res = response ) => {
     const { name, lastname, phone, address, reference } = req.body;
     const uid = req.uid;
 
-    await pool.query(`CALL SP_REGISTER_PERSONAL(?,?,?,?,?,?);`, [ uid, name, lastname, phone, address, reference ]);
+    let data = {
+        firstName: name,
+        lastName: lastname,
+        phone: phone,
+        address: address,
+        reference: reference
+    };
 
-    return res.json({
+    await Person.findByIdAndUpdate( uid, data, { new: true, runValidators: true });
+
+    res.json({
         resp: true,
         msj : 'Infomation personal added'
     });
+
 }
 
 const updateStreetAddress = async ( req, res = response ) => {
@@ -43,9 +67,14 @@ const updateStreetAddress = async ( req, res = response ) => {
     const { address, reference } = req.body;
     const uid = req.uid;
 
-    await pool.query(`CALL SP_UPDATE_STREET(?,?,?);`, [ uid, address, reference ]);
+    let data = {
+        address: address,
+        reference: reference
+    };
+
+    await Person.findByIdAndUpdate( uid, data, { new: true, runValidators: true } );
     
-    return res.json({
+    res.json({
         resp: true,
         msj : 'Street Address updated',
     });
@@ -56,12 +85,23 @@ const getPersonalInformation = async ( req, res = response ) => {
 
     const uid = req.uid;
 
-    const user = await pool.query('SELECT firstName, lastName, phone, address, reference FROM person WHERE uid = ?', [ uid ]);
-    
-    return res.json({
-        resp: true,
-        msj : 'Get personal Information',
-        information: user[0]
+    Person.findById( uid, (err, persondb) => {
+
+        if( err ){
+            return res.status(500).json({
+                resp: false,
+                msj : 'Error: Get personal Information',
+                err
+            });
+        }
+
+        res.json({
+            resp: true,
+            msj : 'Get personal Information',
+            information: persondb
+        });
+
+
     });
 }
 

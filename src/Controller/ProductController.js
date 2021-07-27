@@ -1,47 +1,72 @@
 const { response } = require('express');
-const pool = require('../DataBase/DataBase');
-
+const Products = require('../Models/Products');
+const Favorite = require('../Models/Favorite');
+const OrderBuy = require('../Models/OrderBuy');
+const OrderDetails = require('../Models/OrderDetails');
 
 const addFavoriteProduct = async ( req, res = response ) => {
 
     const { uidProduct, uidUser } = req.body;
 
-    const rows = await pool.query('SELECT product_id, user_id FROM favorite WHERE product_id = ? AND user_id = ?', [ uidProduct, uidUser ]);
+    Favorite.findOne({ product_id : uidProduct })
+            .exec((err, favoritedb ) => {
+                
+                if( err ){
+                    return res.status(500).json({
+                        resp: false,
+                        msj : 'Error: Inserted '
+                    });
+                }
 
-    if( rows.length == 0 ){
+                if( !favoritedb ){
 
-        await pool.query(`CALL SP_ADD_PRODUCT_FAVORITE(?,?);`, [ uidProduct, uidUser ]);
+                    new Favorite({
+                        product_id : uidProduct,
+                        user_id: uidUser
+                    }).save();
 
-        res.json({
-            resp: true,
-            msj : 'Product add to Favorite'
-        });
 
-    } else {
+                    return res.json({
+                        resp: true,
+                        msj : 'Product add to favorite '
+                    });   
+                }
 
-        await pool.query(`CALL SP_DELETE_PRODUCT_FAVORITE(?,?);`, [uidProduct, uidUser]);
+                Favorite.findByIdAndRemove(favoritedb._id).exec();
 
-        res.json({
-            resp: true,
-            msj : 'Delete Product to Favorite'
-        });
+                res.json({
+                    resp: true,
+                    msj : 'Product delete to favorite'
+                })
 
-    }
+
+
+            });
 };
 
 
-const productFavoriteForUser = async ( req, res = response ) => {
+const productFavoriteForUser = ( req, res = response ) => {
 
     const uidUser = req.uid;
 
-    const rows = await pool.query(`CALL SP_LIST_FAVORITE_PRODUCTS(?);`, [ uidUser ]);
+    Favorite.find({ user_id: uidUser })
+            .populate('product_id')
+            .exec((err, favoritedb) => {
 
-    const listProducts = rows[0];
+        if( err ){
+            return res.status(500).json({
+                resp: false,
+                msj : 'Error: Without favorite for user',
+                err
+            });
+        }
 
-    res.json({
-        resp: true,
-        msj : 'List to products favorites',
-        favorites: listProducts
+        res.json({
+            resp: true,
+            msj : 'List to products favorites',
+            favorites: favoritedb
+        });
+
     });
 }
 
@@ -50,18 +75,38 @@ const saveOrderProducts = async ( req, res = response ) => {
 
     const { receipt, date, amount, products  } = req.body;
     const uid = req.uid;
- 
-    const db = await pool.query('INSERT INTO orderBuy (user_id, receipt, datee, amount) VALUES (?,?,?,?)', [ uid, receipt, date, amount ]);
 
-    products.forEach(e => {
-        pool.query('INSERT INTO orderDetails (orderBuy_id, product_id, quantity, price) VALUES (?,?,?,?)', [db.insertId, e.uidProduct, e.amount, e.price]);
+    new OrderBuy({
+        user_id: uid,
+        receipt: 'Ticket',
+        datee: date,
+        amount: amount
+    }).save((err, orderBuydb) => {
+
+        if( err ){
+            return res.status(500).json({
+                resp: false,
+                msj : 'Error: Insert data Order Buy'
+            });
+        }
+
+        products.forEach(e => {
+
+            new OrderDetails({
+                product_id: e.uidProduct,
+                orderBuy_id: orderBuydb._id,
+                quantity: e.amount,
+                price: e.price
+            }).save();
+
+        });
+
+        res.json({
+            resp: true,
+            msj : 'Products save'
+        });
+
     });
-
-    return res.json({
-        resp: true,
-        msj : 'Products save'
-    });
-
 }
 
 
@@ -69,30 +114,54 @@ const getPurchasedProducts = async ( req, res = response ) => {
 
     const uid = req.uid;
 
-    const orderbuy = await pool.query('SELECT uidOrderBuy, receipt, datee, amount FROM orderBuy WHERE user_id = ?', [uid]);
+    OrderBuy.findOne({ user_id: uid }).exec((err, orderBuydb) => {
 
-    console.log(orderbuy);
+        if(err){
+            return res.status(500).json({
+                resp: false,
+                msj : 'Error: Get Order Buy '
+            });
+        }
 
-    const orderDetails = await pool.query(`CALL SP_ORDER_DETAILS(?);`, [orderbuy[0].uidOrderBuy]);
+        OrderDetails.find({ orderBuy_id: orderBuydb._id })
+                    .populate('product_id', 'picture nameProduct price')
+                    .exec((err, orderDetailsdb) => {
 
-    res.json({
-        resp: true,
-        msg : 'Get Puchased Products',
-        orderBuy : orderbuy,
-        orderDetails: orderDetails[0]
+            res.json({
+                resp: true,
+                msg : 'Get Puchased Products',
+                orderBuy : orderBuydb,
+                orderDetails: orderDetailsdb
+            });
+
+        });
+
     });
 }
+
 
 const getProductsForCategories = async ( req, res = response) => {
 
 
-    const rows = await pool.query('SELECT * FROM products WHERE category_id = ?', [ req.params.id  ]); 
+    Products.find({ category_id: req.params.id })
+            .populate('category_id', 'category')
+            .exec((err, productsdb) => {
 
-    res.json({
-        resp: true,
-        msj : 'List Products',
-        products: rows 
-    });
+                if( err ){
+                    return res.status(500).json({
+                        resp: false,
+                        msj : 'Error: Get Products for ID categories ',
+                        err
+                    });
+                }
+
+                res.json({
+                    resp: true,
+                    msj : 'List Products for ID Categories',
+                    products: productsdb
+                });
+
+            });
 
 }
 

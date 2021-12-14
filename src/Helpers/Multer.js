@@ -11,9 +11,21 @@ var storage = multer.diskStorage({
 });
 
 
+var storageProduct = multer.diskStorage({
+    destination: ( req, res, cb ) => {
+        cb(null, 'src/Uploads/Products')
+    },
+    filename: ( req, file, cb ) => {
+        cb( null, file.fieldname + '-' + Date.now() + path.extname(file.originalname) )
+    }
+});
+
+
 const uploadsProfile = multer({ storage: storage });
+const uploadsProduct = multer({ storage: storageProduct });
 
 
 module.exports = {
-    uploadsProfile
+    uploadsProfile,
+    uploadsProduct
 }

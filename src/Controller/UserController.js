@@ -1,75 +1,152 @@
-const { response } = require('express');
+
+const { request, response } = require('express');
 const fs = require('fs-extra');
 const path = require('path');
-const pool = require('../DataBase/DataBase');
+const bcrypt = require('bcrypt');
+const connect = require('../DataBase/DataBase');
 
 
-const changeFotoProfile = async ( req, res = response ) => {
+const addNewUser = async (req = request, res = response) => {
 
-    const { uidPerson } = req.body;
-    const pathNew = req.file.filename;
+    const { username, email, passwordd } = req.body;
 
-    const rows = await pool.query('SELECT image FROM person WHERE uid = ?', [ uidPerson ]);
+    const salt = bcrypt.genSaltSync();
+    const pass = bcrypt.hashSync( passwordd, salt );
 
-    if( rows[0].image != '' ){
-        await fs.unlink(path.resolve('src/Uploads/Profile/'+rows[0].image))
+    const conn = await connect();
+
+    const hasEmail = await conn.query('SELECT email FROM users WHERE email = ?', [email]);
+
+    if( hasEmail[0].length == 0 ){
+
+        await conn.query(`CALL SP_REGISTER_USER(?,?,?);`, [ username, email, pass ]);
+
+        conn.end();
+
+        return res.json({
+            resp: true,
+            message : 'Usuario ' + username +' fue creado con exito!'
+        });
+    
+    } else {
+        return res.json({
+            resp: false,
+            message : 'Email already exists'
+        }); 
     }
 
-    await pool.query(`CALL SP_SAVE_IMAGE_PROFILE(?,?);`, [ pathNew, uidPerson ]);
-
-    return res.json({
-        resp: true,
-        msj : 'Updated image',
-        profile : pathNew
-    });
 }
 
+const getUserById = async (req = request, res = response ) => {
 
-const userPersonalRegister = async ( req, res = response ) => {
+    try {
 
-    const { name, lastname, phone, address, reference } = req.body;
-    const uid = req.uid;
+        const conn = await connect();
 
-    await pool.query(`CALL SP_REGISTER_PERSONAL(?,?,?,?,?,?);`, [ uid, name, lastname, phone, address, reference ]);
+        const userdb = await conn.query(`CALL SP_GET_USER_BY_ID(?);`, [ req.uidPerson ]);
 
-    return res.json({
-        resp: true,
-        msj : 'Infomation personal added'
-    });
+        conn.end();
+
+        return res.json({
+            resp: true,
+            message: 'Get user by Id',
+            user: userdb[0][0][0]
+        });
+        
+    } catch (err) {
+        return res.status(500).json({
+            resp: false,
+            message: err
+        });
+    }
+
+}
+
+const changeFotoProfile = async ( req = request, res = response ) => {
+
+    try {
+
+        const conn = await connect();
+
+        const rows = await conn.query('SELECT image FROM person WHERE uid = ?', [ req.uidPerson ]);
+
+        if( rows[0][0].image != null ){
+            await fs.unlink(path.resolve('src/Uploads/Profile/' + rows[0][0].image));
+        }
+
+        await conn.query('UPDATE person SET image = ? WHERE uid = ?', [ req.file.filename, req.uidPerson ]);
+
+        await conn.end();
+        
+        return res.json({
+            resp: true,
+            message: 'Updated image'
+        });
+        
+    } catch (err) {
+        return res.status(500).json({
+            resp: false,
+            message: err
+        }); 
+    }
+}
+
+const updateInformationUser = async ( req = request, res = response ) => {
+
+    try {
+
+        const { firstname, lastname, phone, address, reference } = req.body;
+
+        const conn = await connect();
+
+        await conn.query(`CALL SP_UPDATE_INFORMATION(?,?,?,?,?,?);`, [ req.uidPerson, firstname, lastname, phone, address, reference ]);
+
+        await conn.end();
+
+        return res.json({
+            resp: true,
+            message: 'Infomation personal added'
+        });
+        
+    } catch (err) {
+        return res.json({
+            resp: false,
+            message: err
+        });
+    }
 }
 
 const updateStreetAddress = async ( req, res = response ) => {
 
-    const { address, reference } = req.body;
-    const uid = req.uid;
+   try {
 
-    await pool.query(`CALL SP_UPDATE_STREET(?,?,?);`, [ uid, address, reference ]);
-    
-    return res.json({
-        resp: true,
-        msj : 'Street Address updated',
-    });
+        const { address, reference } = req.body;
+        
+        const conn = await connect();
+
+        await conn.query(`CALL SP_UPDATE_STREET(?,?,?);`, [ req.uidPerson, address, reference ]);
+
+        await conn.end();
+        
+        return res.json({
+            resp: true,
+            message: 'Street Address updated',
+        });
+        
+    } catch (err) {
+       return res.status(500).json({
+           resp: false,
+           message: err,
+       });
+   }
 
 }
-
-const getPersonalInformation = async ( req, res = response ) => {
-
-    const uid = req.uid;
-
-    const user = await pool.query('SELECT firstName, lastName, phone, address, reference FROM person WHERE uid = ?', [ uid ]);
-    
-    return res.json({
-        resp: true,
-        msj : 'Get personal Information',
-        information: user[0]
-    });
-}
-
 
 
 module.exports = {
+    addNewUser,
+    getUserById,
     changeFotoProfile,
-    userPersonalRegister,
-    updateStreetAddress,
-    getPersonalInformation
+    updateInformationUser,
+    updateStreetAddress
 }

@@ -52,7 +52,7 @@ CREATE TABLE Products
 	codeProduct VARCHAR(100) NULL,
 	stock INT NULL,
 	price DOUBLE(18,2) NULL,
-	status VARCHAR(80) NULL,
+	status VARCHAR(80) DEFAULT 'active',
 	picture VARCHAR(256) NULL,
 	category_id INT,
 	FOREIGN KEY (category_id) REFERENCES Category(uidCategory)
@@ -72,7 +72,7 @@ CREATE TABLE orderBuy
 	uidOrderBuy INT PRIMARY KEY AUTO_INCREMENT,
 	user_id INT,
 	receipt VARCHAR(100),
-	datee DATETIME,
+	created_at DATETIME DEFAULT NOW(),
 	amount DOUBLE(11,2),
 	FOREIGN KEY(user_id) REFERENCES users(persona_id)
 )
@@ -92,27 +92,17 @@ CREATE TABLE orderDetails
 
 
 
---------------------------------------------------------
------------------Storage Procedure----------------------
---------------------------------------------------------
-
--- VALIDATE LOGIN
-DELIMITER //
-CREATE PROCEDURE SP_VALIDATE_LOGIN( IN emaill VARCHAR(100) )
-BEGIN
-	SELECT u.persona_id, u.email, u.users, u.passwordd, image FROM users AS u
-	INNER JOIN person AS p ON u.persona_id = p.uid
-	WHERE email = emaill;
-END//
-
--- Renew Token
+/*---------------------------------------------------------------------------*/
+/*-----------------  Storage PROCEDURE  || FRAVE SHOP ----------------------*/
+/*-------------------------------------------------------------------------*/
 
 DELIMITER //
-CREATE PROCEDURE SP_RENEW_TOKEN(IN ID INT)
+CREATE PROCEDURE SP_GET_USER_BY_ID(IN UID INT )
 BEGIN
-	SELECT u.persona_id, u.email, u.users, image FROM users AS u
-	INNER JOIN person AS p ON u.persona_id = p.uid
-	WHERE u.persona_id = ID;
+	SELECT pe.uid, pe.firstName, pe.lastName, pe.phone, pe.address, pe.reference, pe.image, us.users, us.email 
+	FROM person pe
+	INNER JOIN users us ON pe.uid = us.persona_id
+	WHERE pe.uid = UID;
 END//
 
 
@@ -124,9 +114,9 @@ BEGIN
 	INSERT INTO users ( users, email, passwordd , persona_id ) VALUE (usu, email, passwordd, LAST_INSERT_ID());
 END//
 
--- Add new register personal
+
 DELIMITER //
-CREATE PROCEDURE SP_REGISTER_PERSONAL( IN uid INT, IN nam VARCHAR(90), IN lastt VARCHAR(90), IN phone VARCHAR(11), IN address VARCHAR(90), IN reference VARCHAR(90))
+CREATE PROCEDURE SP_UPDATE_INFORMATION( IN uid INT, IN nam VARCHAR(90), IN lastt VARCHAR(90), IN phone VARCHAR(11), IN address VARCHAR(90), IN reference VARCHAR(90))
 BEGIN
 	UPDATE person
 		SET firstName = nam, 
@@ -140,61 +130,51 @@ END//
 
 -- Update Street Address - user
 DELIMITER //
-CREATE PROCEDURE SP_UPDATE_STREET(IN uid INT, IN address VARCHAR(90), IN reference VARCHAR(90) )
+CREATE PROCEDURE SP_UPDATE_STREET(IN uid INT, IN ADDRESS VARCHAR(90), IN REFERENCESS VARCHAR(90) )
 BEGIN
 	UPDATE person
-		SET address = address, 
-			 reference = referenceperson
+		SET address = ADDRESS, 
+			 reference = REFERENCESS
 	WHERE person.uid = uid;
 END//
 
 
-
--- SAVE IMAGE SELECTED 
+-- LIST PRODUCTS HOME
 DELIMITER //
-CREATE PROCEDURE SP_SAVE_IMAGE_PROFILE( IN img VARCHAR(250), IN uid INT )
+CREATE PROCEDURE SP_LIST_PRODUCTS_HOME(IN UID INT)
 BEGIN
-	UPDATE person
-		SET image = img
-	WHERE person.uid = uid;
-END//
-
-
--- LIST PRODUCTS HOME JOIN CATEGORIES
-DELIMITER //
-CREATE PROCEDURE SP_LIST_PRODUCTS_HOME()
-BEGIN
-	SELECT uidProduct, nameProduct, description, codeProduct, stock, price, p.status, p.picture, category FROM Products AS p
+	SELECT uidProduct, nameProduct, description, codeProduct, stock, price, p.status, p.picture, c.category,
+	(SELECT COUNT(fa.uidFavorite) FROM favorite fa WHERE fa.user_id = UID AND fa.product_id = p.uidProduct ) AS is_favorite
+	FROM Products AS p
 	INNER JOIN Category AS c ON p.category_id = c.uidCategory
 	ORDER BY uidProduct DESC LIMIT 10;
 END//
 
 
---- ADD A PRODUCT TO FAVORITE LIST
-DELIMITER //
-CREATE PROCEDURE SP_ADD_PRODUCT_FAVORITE( IN idPro INT, IN idUser INT )
-BEGIN
-	INSERT INTO favorite ( product_id, user_id ) VALUE ( idPro, idUser );
-END//
-
-
---- DELETE A PRODUCT TO FAVORITE FROM LIST
-DELIMITER //
-CREATE PROCEDURE SP_DELETE_PRODUCT_FAVORITE( IN idPro INT, IN idUser INT )
-BEGIN 
-	DELETE FROM favorite
-	WHERE product_id = idPro AND user_id = idUser;
-END//
-
-
 --- LIST FAVORITE OF PRODUCTS
 DELIMITER //
-CREATE PROCEDURE SP_LIST_FAVORITE_PRODUCTS( IN ID INT )
+CREATE PROCEDURE SP_LIST_FAVORITE_PRODUCTS( IN UID INT )
 BEGIN
-	SELECT uidProduct, nameProduct, description, codeProduct, stock, price, status, picture, category_id, f.product_id as favorite_id FROM Products AS p
-	LEFT JOIN Favorite AS f ON p.uidProduct = f.product_id
+	SELECT uidProduct, nameProduct, description, codeProduct, stock, price, p.status, p.picture, c.category,
+	(SELECT COUNT(fa.uidFavorite) FROM favorite fa WHERE fa.user_id = UID AND fa.product_id = p.uidProduct ) AS is_favorite
+	FROM Products AS p
+	INNER JOIN Category AS c ON p.category_id = c.uidCategory
+	INNER JOIN favorite AS f ON p.uidProduct = f.product_id
+	INNER JOIN users AS u ON f.user_id = u.id
+	WHERE u.id = UID;
+END//
+
+--- LIST PRODUCTS FOR CATEGORIES
+DELIMITER //
+CREATE PROCEDURE SP_LIST_PRODUCTS_FOR_CATEGORY(IN UIDCATEGORY INT, IN UIDUSER INT)
+BEGIN
+	SELECT uidProduct, nameProduct, description, codeProduct, stock, price, p.status, p.picture, c.category,
+	(SELECT COUNT(fa.uidFavorite) FROM favorite fa WHERE fa.user_id = UIDUSER AND fa.product_id = p.uidProduct ) AS is_favorite
+	FROM Products AS p
+	INNER JOIN Category AS c ON p.category_id = c.uidCategory
+	LEFT JOIN favorite AS f ON p.uidProduct = f.product_id
 	LEFT JOIN users AS u ON f.user_id = u.id
-	WHERE u.id = ID;
+	WHERE c.uidCategory = UIDCATEGORY;
 END//
 
 
@@ -204,7 +184,16 @@ CREATE PROCEDURE SP_ORDER_DETAILS( IN ID INT )
 BEGIN
 	SELECT o.uidOrderDetails, o.product_id, p.nameProduct, p.picture, o.quantity, o.price  FROM orderdetails o
 	INNER JOIN products p ON o.product_id = p.uidProduct
-	WHERE o.orderBuy_id = 3;
+	WHERE o.orderBuy_id = ID;
 END//
+
+
+
+
+
+
+
+
+
 
 
